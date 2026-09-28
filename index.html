@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Light Up Arizona Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet core -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body { margin: 0; }
+    #map { height: 100vh; width: 100%; }
+    .popup-content { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
+    .popup-content iframe, .popup-content img {
+      border-radius: 10px;
+      margin-top: 5px;
+      display: block;
+      width: 220px;
+      border: none;
+    }
+    .emoji-marker {
+      font-size: 40px;
+      text-align: center;
+      line-height: 1;
+      user-select: none;
+    }
+
+    #filter-bar {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; background: rgba(255,255,255,0.9);
+      border-radius: 10px; padding: 6px 10px;
+      font-family: system-ui; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    #filter-bar button {
+      margin: 0 4px; padding: 4px 10px; border: none; border-radius: 6px;
+      cursor: pointer; font-weight: 600;
+    }
+    #filter-bar button.active { background: #0f8a7c; color: white; }
+
+    html, body {
+      margin: 0; padding: 0; height: 100%; width: 100%;
+      overflow: hidden;
+    }
+    #map {
+      height: 100vh; width: 100vw;
+    }
+
+    #return-btn {
+      position: absolute;
+      bottom: 15px; left: 15px;
+      z-index: 1000;
+      background-color: #0f8a7c;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-family: system-ui, sans-serif;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      transition: background 0.2s ease;
+    }
+    #return-btn:hover { background-color: #0c6e64; }
+  </style>
+</head>
+
+<body>
+  <div id="filter-bar">
+    <button data-filter="All" class="active">🌎 All</button>
+    <button data-filter="Halloween">🎃 Halloween</button>
+    <button data-filter="Christmas">🎄 Christmas</button>
+  </div>
+
+  <a href="https://www.jotform.com/app/252827227715158" id="return-btn">⬅ Back to App</a>
+  <div id="map"></div>
+
+  <script>
+    const sheetUrl = 'https://docs.google.com/spreadsheets/d/1vJoXoxJ1LZajKC-06hV_f_H7CsKAk2ncwMsB799HMUY/gviz/tq?tqx=out:csv&gid=13731177';
+
+    // ===== Base map layers =====
+    const roads = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, attribution: '© OpenStreetMap contributors'
+    });
+    const satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 20, attribution: '© Google Satellite'
+    });
+    const hybrid = L.layerGroup([
+      L.tileLayer('https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', { maxZoom: 20 })
+    ]);
+
+    const esriStreets = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles © Esri' }
+    );
+
+    const map = L.map('map', { center: [33.4652,-112.0780], zoom: 10, layers: [esriStreets] });
+
+    const baseMaps = {
+      "🛰 Satellite": satellite,
+      "🗺 Roads": roads,
+      "🧭 Esri Streets": esriStreets,
+      "🌎 Hybrid": hybrid
+    };
+    L.control.layers(baseMaps).addTo(map);
+
+    // ===== Icons =====
+    const size = [52, 52];
+    const icons = {
+      Christmas: L.divIcon({ html: '🎄', className: 'emoji-marker', iconSize: size }),
+      Halloween: L.divIcon({ html: '🎃', className: 'emoji-marker', iconSize: size }),
+      Default:   L.divIcon({ html: '⭐', className: 'emoji-marker', iconSize: size }),
+      Cactus:    L.divIcon({ html: '🌵', className: 'emoji-marker', iconSize: size }),
+      BlueBulb:  L.divIcon({ html: '💡', className: 'emoji-marker', iconSize: size }),
+      RedBulb:   L.divIcon({ html: '❤️', className: 'emoji-marker', iconSize: size }),
+      Snowflake: L.divIcon({ html: '❄️', className: 'emoji-marker', iconSize: size }),
+      Candle:    L.divIcon({ html: '🕯️', className: 'emoji-marker', iconSize: size }),
+      Gift:      L.divIcon({ html: '🎁', className: 'emoji-marker', iconSize: size }),
+      Mittens:   L.divIcon({ html: '🧤', className: 'emoji-marker', iconSize: size }),
+      Disco:     L.divIcon({ html: '🪩', className: 'emoji-marker', iconSize: size }),
+      Bell:      L.divIcon({ html: '🔔', className: 'emoji-marker', iconSize: size }),
+      MapPin:    L.divIcon({ html: '📍', className: 'emoji-marker', iconSize: size }),
+      Reindeer:  L.divIcon({ html: '🦌', className: 'emoji-marker', iconSize: size }),
+      Prickly: L.icon({
+        // The URL below has been updated to your requested image link
+        iconUrl: 'https://lh3.googleusercontent.com/a/ACg8ocJaC7AauOmB8_kc6ahHLeofBCiXoRDGlz5tliBOxX0UOzaKR5Bo0Q=s288-c-no',
+        iconSize: [50, 50], iconAnchor: [25, 50], popupAnchor: [0, -30],
+      }),
+    };
+
+    const style = document.createElement('style');
+    style.innerHTML = `
+      .emoji-marker {
+        font-size: 36px;
+        line-height: 36px;
+        text-align: center;
+        transform: translateY(10px);
+      }
+    `;
+    document.head.appendChild(style);
+
+    const markers = [];
+
+    // ===== Fetch Sheet =====
+    Papa.parse(sheetUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      quotes: true,
+      newline: "\n",
+      dynamicTyping: false,
+      complete: (results) => {
+        const data = results.data;
+        console.log(`✅ Loaded ${data.length} rows`);
+
+        data.forEach((row) => {
+          if (!row['Approval Status'] || row['Approval Status'].toLowerCase() !== 'approved') return;
+
+          const name = row['Your Display Name'];
+          const address = row['Full Address'];
+          const holiday = (row['Which Holidays Do You Setup For'] || '').replace(/\r?\n/g, ', ');
+          const desc = row['Show Description'];
+          const features = row['Show Features'] || '';
+          const fm = row['FM Station'] || '';
+          const rf = row['Remote Falcon Page'];
+          const pm = row['PulseMesh Link'];
+          const photo1 = row['Photo 1'];
+          const photo2 = row['Photo 2'];
+          const lat = parseFloat(row['Latitude']);
+          const lon = parseFloat(row['Longitude']);
+          const markerStyle = row['Marker Style'] || '';
+
+          if (isNaN(lat) || isNaN(lon)) return;
+
+          const rfLink = rf ? `<a href="${rf}" target="_blank">Remote Falcon</a>` : '';
+          const pmLink = pm ? `<a href="${pm}" target="_blank">PulseMesh</a>` : '';
+          const fmLine = fm ? `<strong>FM Station: ${fm} FM</strong>` : '';
+          const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+
+          const embed = (url) => {
+            const idMatch = url?.match(/[-\w]{25,}/);
+            return idMatch
+              ? `<iframe src="https://drive.google.com/file/d/${idMatch[0]}/preview" width="220" height="160"></iframe>`
+              : '';
+          };
+
+          const markerStyleClean = (markerStyle || '').replace(/[^\w]/g, '').toLowerCase();
+          let iconType = icons.Default;
+
+          const key = Object.keys(icons).find(k =>
+            markerStyleClean.includes(k.toLowerCase())
+          );
+          if (key) iconType = icons[key];
+
+          if (name.toLowerCase().includes('prickly guy')) {
+            iconType = icons.Prickly;
+          }
+
+          // ⭐ Convert pumpkins/halloween styles→ snowflakes ⭐
+          if (
+            markerStyleClean.includes('pumpkin') ||
+            markerStyleClean.includes('halloween')
+          ) {
+            iconType = icons.Snowflake;
+          }
+          const html = `
+            <div class="popup-content">
+              <b>${name}</b><br>
+              <a href="${mapsLink}" target="_blank">${address}</a><br>
+              ${holiday ? `<p><strong>We decorate for:</strong> ${holiday}</p>` : ''}
+              ${desc ? `<p>${desc}</p>` : ''}
+              ${features || fm || rfLink || pmLink ? `<p><strong>Features:</strong><br>
+                ${features ? features + '<br>' : ''}
+                ${fmLine ? fmLine + '<br>' : ''}
+                ${rfLink ? rfLink + '<br>' : ''}
+                ${pmLink || ''}</p>` : ''}
+              ${photo1 ? embed(photo1) : ''}
+              ${photo2 ? embed(photo2) : ''}
+            </div>`;
+
+          const marker = L.marker([lat, lon], { icon: iconType })
+            .addTo(map)
+            .bindPopup(html);
+
+          makeBounceOnClick(marker);
+
+          markers.push({ marker, holiday });
+        });
+
+        // ⭐ FORCE DEFAULT FILTER: CHRISTMAS
+        applyChristmasDefault();
+      }
+    });
+
+    // ===== Filter Buttons =====
+    document.querySelectorAll('#filter-bar button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#filter-bar button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filter = btn.dataset.filter;
+
+        markers.forEach(({ marker, holiday }) => {
+          const show = filter === 'All' || holiday.toLowerCase().includes(filter.toLowerCase());
+          if (show) marker.addTo(map);
+          else map.removeLayer(marker);
+        });
+
+        // Resize icons on zoom
+        map.on('zoomend', () => {
+          const zoom = map.getZoom();
+          const baseSize = 28;
+          const scaledSize = baseSize + (zoom * 1.8);
+          document.querySelectorAll('.emoji-marker').forEach(el => {
+            el.style.fontSize = `${scaledSize}px`;
+          });
+        });
+      });
+    });
+
+    // ===== Bounce animation =====
+    const bounceStyle = document.createElement('style');
+    bounceStyle.innerHTML = `
+      @keyframes marker-bounce {
+        0%   { transform: translateY(0) scale(1); }
+        30%  { transform: translateY(-10px) scale(1.15); }
+        60%  { transform: translateY(0) scale(1); }
+        100% { transform: translateY(0); }
+      }
+      .bouncing {
+        animation: marker-bounce 0.4s ease;
+      }
+    `;
+    document.head.appendChild(bounceStyle);
+
+    function makeBounceOnClick(marker) {
+      marker.on('click', (e) => {
+        const el = e.target._icon;
+        if (!el) return;
+        el.classList.add('bouncing');
+        setTimeout(() => el.classList.remove('bouncing'), 400);
+      });
+    }
+
+    // ⭐⭐⭐ FORCE CHRISTMAS DEFAULT + HIDE OTHER FILTERS ⭐⭐⭐
+    function applyChristmasDefault() {
+
+      // Hide Halloween + All buttons
+      document.querySelector('#filter-bar button[data-filter="Halloween"]').style.display = 'none';
+      document.querySelector('#filter-bar button[data-filter="All"]').style.display = 'none';
+
+      // Force Christmas as active
+      const christmasBtn = document.querySelector('#filter-bar button[data-filter="Christmas"]');
+      document.querySelectorAll('#filter-bar button').forEach(b => b.classList.remove('active'));
+      christmasBtn.classList.add('active');
+
+      // Apply filter now that markers exist
+      const filter = 'Christmas';
+      markers.forEach(({ marker, holiday }) => {
+        const show = holiday.toLowerCase().includes(filter.toLowerCase());
+        if (show) marker.addTo(map);
+        else map.removeLayer(marker);
+      });
+    }
+
+  </script>
+</body>
+</html>
