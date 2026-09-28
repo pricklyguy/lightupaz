@@ -228,8 +228,7 @@
           markers.push({ marker, holiday });
         });
 
-        // ⭐ FORCE DEFAULT FILTER: CHRISTMAS
-        applyChristmasDefault();
+        applySeasonalDefault();
       }
     });
 
@@ -283,20 +282,16 @@
       });
     }
 
-    // ⭐⭐⭐ FORCE CHRISTMAS DEFAULT + HIDE OTHER FILTERS ⭐⭐⭐
-    function applyChristmasDefault() {
+    // ⭐ DEFAULT FILTER: Halloween before Nov 1, Christmas from Nov 1 onward ⭐
+    function applySeasonalDefault() {
+      const today = new Date();
+      const novFirst = new Date(today.getFullYear(), 10, 1); // month 10 = November
+      const filter = today < novFirst ? 'Halloween' : 'Christmas';
 
-      // Hide Halloween + All buttons
-      document.querySelector('#filter-bar button[data-filter="Halloween"]').style.display = 'none';
-      document.querySelector('#filter-bar button[data-filter="All"]').style.display = 'none';
-
-      // Force Christmas as active
-      const christmasBtn = document.querySelector('#filter-bar button[data-filter="Christmas"]');
+      const defaultBtn = document.querySelector(`#filter-bar button[data-filter="${filter}"]`);
       document.querySelectorAll('#filter-bar button').forEach(b => b.classList.remove('active'));
-      christmasBtn.classList.add('active');
+      defaultBtn.classList.add('active');
 
-      // Apply filter now that markers exist
-      const filter = 'Christmas';
       markers.forEach(({ marker, holiday }) => {
         const show = holiday.toLowerCase().includes(filter.toLowerCase());
         if (show) marker.addTo(map);
