@@ -167,10 +167,19 @@ function runAllOnSubmit() {
   updateLatLon();
 }
 
+// GET: manual/Home Assistant trigger. POST: Jotform's Webhooks integration
+// (Settings > Integrations > Webhooks) posts here on every new submission.
 function doGet(e) {
-  // --- Run your main update routine ---
-  Logger.log("✅ Manual trigger received via webhook.");
-  runAllOnSubmit();             // your existing Apps Script function
+  return handleTrigger_();
+}
+
+function doPost(e) {
+  return handleTrigger_();
+}
+
+function handleTrigger_() {
+  Logger.log("✅ Trigger received.");
+  runAllOnSubmit();
   SpreadsheetApp.flush();       // ensure changes are written
 
   // --- Get the sheet's real last-modified time from Drive ---
@@ -183,7 +192,7 @@ function doGet(e) {
     "✅ Light Up AZ map updated\n" +
     "Last Modified: " + lastUpdatedISO;
 
-  // --- Return plain text (HA will parse easily) ---
+  // --- Return plain text ---
   return ContentService.createTextOutput(message)
     .setMimeType(ContentService.MimeType.TEXT);
 }
